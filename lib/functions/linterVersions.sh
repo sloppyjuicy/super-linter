@@ -68,13 +68,9 @@ BuildLinterVersions() {
       if [[ ${LINTER} == "arm-ttk" ]]; then
         # Need specific command for ARM
         GET_VERSION_CMD="$(grep -iE 'version' "/usr/bin/arm-ttk" | xargs 2>&1)"
-      elif [[ ${LINTER} == "bash-exec" ]] || [[ ${LINTER} == "gherkin-lint" ]]; then
+      elif [[ ${LINTER} == "bash-exec" ]] || [[ ${LINTER} == "gherkin-lint" ]] || [[ ${LINTER} == "gitleaks" ]]; then
         # Need specific command for Protolint and editorconfig-checker
         GET_VERSION_CMD="$(echo "--version not supported")"
-      elif [[ ${LINTER} == "jsonlint" ]]; then
-        # Workaround for https://github.com/zaach/jsonlint/issues/122
-        # Delete after that issue is resolved
-        GET_VERSION_CMD="$("${LINTER}" --version 2>&1 || true)"
       elif [[ ${LINTER} == "lintr" ]]; then
         # Need specific command for lintr (--slave is deprecated in R 4.0 and replaced by --no-echo)
         GET_VERSION_CMD="$(R --slave -e "r_ver <- R.Version()\$version.string; \
@@ -85,7 +81,7 @@ BuildLinterVersions() {
         GET_VERSION_CMD="$("${LINTER}" -v 2>&1)"
       elif [[ ${LINTER} == "terrascan" ]]; then
         GET_VERSION_CMD="$("${LINTER}" version 2>&1)"
-      elif [[ ${LINTER} == "checkstyle" ]]; then
+      elif [[ ${LINTER} == "checkstyle" ]] || [[ ${LINTER} == "google-java-format" ]]; then
         GET_VERSION_CMD="$(java -jar "/usr/bin/${LINTER}" --version 2>&1)"
       elif [[ ${LINTER} == "clippy" ]]; then
         GET_VERSION_CMD="$(cargo-clippy --version 2>&1)"

@@ -1,6 +1,6 @@
-# CPP Test Cases
+# Clang Test Cases
 
-This folder holds the test cases for **CPP**.
+This folder holds the test cases for **C/C++**.
 
 ## Additional Docs
 

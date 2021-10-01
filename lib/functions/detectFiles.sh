@@ -28,6 +28,22 @@ DetectAnsibleFile() {
   fi
 }
 ################################################################################
+#### Function DetectActions ####################################################
+DetectActions() {
+  FILE="${1}"
+
+  debug "Checking if ${FILE} is a GitHub Actions file..."
+
+  # Check if in the users .github, or the super linter test suite
+  if [[ "$(dirname "${FILE}")" == *".github/workflows"* ]] || [[ "$(dirname "${FILE}")" == *".automation/test/github_actions"* ]]; then
+    debug "${FILE} is GitHub Actions file."
+    return 0
+  else
+    debug "${FILE} is NOT GitHub Actions file."
+    return 1
+  fi
+}
+################################################################################
 #### Function DetectOpenAPIFile ################################################
 DetectOpenAPIFile() {
   ################
@@ -187,7 +203,8 @@ DetectAWSStatesFIle() {
   ###############################
   # check if file has resources #
   ###############################
-  if grep -q '"Resource": *"arn"*' "${FILE}"; then
+  if grep -q '"Resource": *"arn' "${FILE}" &&
+    grep -q '"States"' "${FILE}"; then
     # Found it
     return 0
   fi
@@ -257,11 +274,13 @@ function CheckFileType() {
   GET_FILE_TYPE_CMD="$(GetFileType "$FILE")"
 
   if [[ ${GET_FILE_TYPE_CMD} == *"Ruby script"* ]]; then
-    #######################
-    # It is a Ruby script #
-    #######################
-    warn "Found ruby script without extension:[.rb]"
-    info "Please update file with proper extensions."
+    if [ "${SUPPRESS_FILE_TYPE_WARN}" == "false" ]; then
+      #######################
+      # It is a Ruby script #
+      #######################
+      warn "Found ruby script without extension:[.rb]"
+      info "Please update file with proper extensions."
+    fi
     ################################
     # Append the file to the array #
     ################################
@@ -316,6 +335,7 @@ function IsValidShellScript() {
 
   if [ "${FILE_EXTENSION}" == "sh" ] ||
     [ "${FILE_EXTENSION}" == "bash" ] ||
+    [ "${FILE_EXTENSION}" == "bats" ] ||
     [ "${FILE_EXTENSION}" == "dash" ] ||
     [ "${FILE_EXTENSION}" == "ksh" ]; then
     debug "$FILE is a valid shell script (has a valid extension: ${FILE_EXTENSION})"
@@ -333,4 +353,88 @@ function IsValidShellScript() {
 
   trace "$FILE is NOT a supported shell script. Skipping"
   return 1
+}
+################################################################################
+#### Function IsGenerated ######################################################
+function IsGenerated() {
+  # Pull in Vars #
+  ################
+  FILE="$1"
+
+  ##############################
+  # Check the file for keyword #
+  ##############################
+  grep -q "@generated" "$FILE"
+
+  #######################
+  # Load the error code #
+  #######################
+  ERROR_CODE=$?
+
+  if [ ${ERROR_CODE} -ne 0 ]; then
+    trace "File:[${FILE}] is not generated, because it doesn't have @generated marker"
+    return 1
+  fi
+
+  ##############################
+  # Check the file for keyword #
+  ##############################
+  grep -q "@not-generated" "$FILE"
+
+  #######################
+  # Load the error code #
+  #######################
+  ERROR_CODE=$?
+
+  if [ ${ERROR_CODE} -eq 0 ]; then
+    trace "File:[${FILE}] is not-generated because it has @not-generated marker"
+    return 1
+  else
+    trace "File:[${FILE}] is generated because it has @generated marker"
+    return 0
+  fi
+}
+################################################################################
+#### Function RunAdditionalInstalls ############################################
+function RunAdditionalInstalls() {
+  ##################################
+  # Run installs for Psalm and PHP #
+  ##################################
+  if [ "${VALIDATE_PHP_PSALM}" == "true" ] && [ "${#FILE_ARRAY_PHP_PSALM[@]}" -ne 0 ]; then
+    # found PHP files and were validating it, need to composer install
+    info "Found PHP files to validate, and [VALIDATE_PHP_PSALM] set to true, need to run composer install"
+    info "looking for composer.json in the users repository..."
+    mapfile -t COMPOSER_FILE_ARRAY < <(find / -name composer.json 2>&1)
+    debug "COMPOSER_FILE_ARRAY contents:[${COMPOSER_FILE_ARRAY[*]}]"
+    ############################################
+    # Check if we found the file in the system #
+    ############################################
+    if [ "${#COMPOSER_FILE_ARRAY[@]}" -ne 0 ]; then
+      for LINE in "${COMPOSER_FILE_ARRAY[@]}"; do
+        PATH=$(dirname "${LINE}" 2>&1)
+        info "Found [composer.json] at:[${LINE}]"
+        COMPOSER_CMD=$(
+          cd "${PATH}" || exit 1
+          composer install --no-progress -q 2>&1
+        )
+
+        ##############
+        # Error code #
+        ##############
+        ERROR_CODE=$?
+
+        ##############################
+        # Check the shell for errors #
+        ##############################
+        if [ "${ERROR_CODE}" -ne 0 ]; then
+          # Error
+          error "ERROR! Failed to run composer install at location:[${PATH}]"
+          fatal "ERROR:[${COMPOSER_CMD}]"
+        else
+          # Success
+          info "Successfully ran:[composer install] for PHP validation"
+        fi
+      done
+    fi
+  fi
 }
